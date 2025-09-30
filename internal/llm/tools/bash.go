@@ -32,9 +32,10 @@ type BashResponseMetadata struct {
 	WorkingDirectory string `json:"working_directory"`
 }
 type bashTool struct {
-	permissions permission.Service
-	workingDir  string
-	attribution *config.Attribution
+	permissions     permission.Service
+	workingDir      string
+	attribution     *config.Attribution
+	allowedCommands []string
 }
 
 const (
@@ -196,9 +197,24 @@ git commit -m "$(cat <<'EOF'
 	return out.String()
 }
 
-func blockFuncs() []shell.BlockFunc {
+func blockFuncs(allowedCommands []string) []shell.BlockFunc {
+	// Filter banned commands - remove any that are explicitly allowed
+	filteredBanned := make([]string, 0, len(bannedCommands))
+	for _, cmd := range bannedCommands {
+		allowed := false
+		for _, allowedCmd := range allowedCommands {
+			if cmd == allowedCmd {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			filteredBanned = append(filteredBanned, cmd)
+		}
+	}
+
 	return []shell.BlockFunc{
-		shell.CommandsBlocker(bannedCommands),
+		shell.CommandsBlocker(filteredBanned),
 
 		// System package managers
 		shell.ArgumentsBlocker("apk", []string{"add"}, nil),
@@ -228,15 +244,16 @@ func blockFuncs() []shell.BlockFunc {
 	}
 }
 
-func NewBashTool(permission permission.Service, workingDir string, attribution *config.Attribution) BaseTool {
+func NewBashTool(permission permission.Service, workingDir string, attribution *config.Attribution, allowedCommands []string) BaseTool {
 	// Set up command blocking on the persistent shell
 	persistentShell := shell.GetPersistentShell(workingDir)
-	persistentShell.SetBlockFuncs(blockFuncs())
+	persistentShell.SetBlockFuncs(blockFuncs(allowedCommands))
 
 	return &bashTool{
-		permissions: permission,
-		workingDir:  workingDir,
-		attribution: attribution,
+		permissions:     permission,
+		workingDir:      workingDir,
+		attribution:     attribution,
+		allowedCommands: allowedCommands,
 	}
 }
 

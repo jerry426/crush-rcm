@@ -178,8 +178,12 @@ func NewAgent(
 		}()
 
 		cwd := cfg.WorkingDir()
+		var allowedCommands []string
+		if cfg.Permissions != nil {
+			allowedCommands = cfg.Permissions.AllowedCommands
+		}
 		allTools := []tools.BaseTool{
-			tools.NewBashTool(permissions, cwd, cfg.Options.Attribution),
+			tools.NewBashTool(permissions, cwd, cfg.Options.Attribution, allowedCommands),
 			tools.NewDownloadTool(permissions, cwd),
 			tools.NewEditTool(lspClients, permissions, history, cwd),
 			tools.NewMultiEditTool(lspClients, permissions, history, cwd),

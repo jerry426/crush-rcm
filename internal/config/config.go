@@ -134,8 +134,9 @@ type TUIOptions struct {
 }
 
 type Permissions struct {
-	AllowedTools []string `json:"allowed_tools,omitempty" jsonschema:"description=List of tools that don't require permission prompts,example=bash,example=view"` // Tools that don't require permission prompts
-	SkipRequests bool     `json:"-"`                                                                                                                              // Automatically accept all permissions (YOLO mode)
+	AllowedTools    []string `json:"allowed_tools,omitempty" jsonschema:"description=List of tools that don't require permission prompts,example=bash,example=view"`       // Tools that don't require permission prompts
+	AllowedCommands []string `json:"allowed_commands,omitempty" jsonschema:"description=Commands that are normally banned but should be allowed,example=curl,example=wget"` // Commands to unban from bash tool restrictions
+	SkipRequests    bool     `json:"-"`                                                                                                                                      // Automatically accept all permissions (YOLO mode)
 }
 
 type Attribution struct {
