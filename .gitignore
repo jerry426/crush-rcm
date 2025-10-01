@@ -50,3 +50,4 @@ manpages/
 completions/
 !internal/tui/components/completions/
 crush-rcm
+.vscode_gateway_port
