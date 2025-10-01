@@ -31,7 +31,9 @@ func LoadReader(fd io.Reader) (*Config, error) {
 		return nil, err
 	}
 
-	var config Config
+	config := Config{
+		Providers: csync.NewMap[string, ProviderConfig](),
+	}
 	err = json.Unmarshal(data, &config)
 	if err != nil {
 		return nil, err
@@ -76,6 +78,7 @@ func Load(workingDir, dataDir string, debug bool) (*Config, error) {
 	if err := cfg.configureProviders(env, valueResolver, cfg.knownProviders); err != nil {
 		return nil, fmt.Errorf("failed to configure providers: %w", err)
 	}
+
 
 	if !cfg.IsConfigured() {
 		slog.Warn("No providers configured")
@@ -253,7 +256,7 @@ func (c *Config) configureProviders(env env.Env, resolver VariableResolver, know
 		}
 
 		if providerConfig.Disable {
-			slog.Debug("Skipping custom provider due to disable flag", "provider", id)
+			slog.Warn("Skipping custom provider due to disable flag", "provider", id)
 			c.Providers.Del(id)
 			continue
 		}
