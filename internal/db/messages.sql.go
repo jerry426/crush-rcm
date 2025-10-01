@@ -11,19 +11,32 @@ import (
 )
 
 const createMessage = `-- name: CreateMessage :one
-INSERT INTO messages (
+INSERT INTO ai_conversation_turns (
     id,
-    session_id,
+    conversation_id,
+    turn_number,
+    agent,
     role,
+    content,
     parts,
     model,
     provider,
-    created_at,
-    updated_at
-) VALUES (
-    ?, ?, ?, ?, ?, ?, strftime('%s', 'now'), strftime('%s', 'now')
+    timestamp
 )
-RETURNING id, session_id, role, parts, model, created_at, updated_at, finished_at, provider
+SELECT
+    gen_random_uuid(),
+    c.id,
+    COALESCE((SELECT MAX(turn_number) FROM ai_conversation_turns WHERE conversation_id = c.id), 0) + 1,
+    'crush-rcm',
+    $2,
+    $3,
+    $3::jsonb,
+    $4,
+    $5,
+    CURRENT_TIMESTAMP
+FROM ai_conversations c
+WHERE c.session_id = $1
+RETURNING id, conversation_id, role, parts, model, timestamp, created_at, finished_at, provider
 `
 
 type CreateMessageParams struct {
@@ -45,23 +58,30 @@ func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (M
 		arg.Provider,
 	)
 	var i Message
+	var convID sql.NullString
+	var timestamp, createdAt sql.NullTime
 	err := row.Scan(
 		&i.ID,
-		&i.SessionID,
+		&convID,
 		&i.Role,
 		&i.Parts,
 		&i.Model,
-		&i.CreatedAt,
-		&i.UpdatedAt,
+		&timestamp,
+		&createdAt,
 		&i.FinishedAt,
 		&i.Provider,
 	)
+	i.SessionID = arg.SessionID
+	if timestamp.Valid {
+		i.CreatedAt = timestamp.Time.Unix()
+		i.UpdatedAt = i.CreatedAt
+	}
 	return i, err
 }
 
 const deleteMessage = `-- name: DeleteMessage :exec
-DELETE FROM messages
-WHERE id = ?
+DELETE FROM ai_conversation_turns
+WHERE id = $1
 `
 
 func (q *Queries) DeleteMessage(ctx context.Context, id string) error {
@@ -70,8 +90,10 @@ func (q *Queries) DeleteMessage(ctx context.Context, id string) error {
 }
 
 const deleteSessionMessages = `-- name: DeleteSessionMessages :exec
-DELETE FROM messages
-WHERE session_id = ?
+DELETE FROM ai_conversation_turns t
+USING ai_conversations c
+WHERE t.conversation_id = c.id
+AND c.session_id = $1
 `
 
 func (q *Queries) DeleteSessionMessages(ctx context.Context, sessionID string) error {
@@ -80,33 +102,39 @@ func (q *Queries) DeleteSessionMessages(ctx context.Context, sessionID string) e
 }
 
 const getMessage = `-- name: GetMessage :one
-SELECT id, session_id, role, parts, model, created_at, updated_at, finished_at, provider
-FROM messages
-WHERE id = ? LIMIT 1
+SELECT id, conversation_id, role, parts, model, created_at, finished_at, provider
+FROM ai_conversation_turns
+WHERE id = $1 LIMIT 1
 `
 
 func (q *Queries) GetMessage(ctx context.Context, id string) (Message, error) {
 	row := q.queryRow(ctx, q.getMessageStmt, getMessage, id)
 	var i Message
+	var convID sql.NullString
+	var createdAt sql.NullTime
 	err := row.Scan(
 		&i.ID,
-		&i.SessionID,
+		&convID,
 		&i.Role,
 		&i.Parts,
 		&i.Model,
-		&i.CreatedAt,
-		&i.UpdatedAt,
+		&createdAt,
 		&i.FinishedAt,
 		&i.Provider,
 	)
+	if createdAt.Valid {
+		i.CreatedAt = createdAt.Time.Unix()
+		i.UpdatedAt = i.CreatedAt
+	}
 	return i, err
 }
 
 const listMessagesBySession = `-- name: ListMessagesBySession :many
-SELECT id, session_id, role, parts, model, created_at, updated_at, finished_at, provider
-FROM messages
-WHERE session_id = ?
-ORDER BY created_at ASC
+SELECT t.id, c.session_id, t.role, t.parts, t.model, t.created_at, t.created_at, t.finished_at, t.provider
+FROM ai_conversation_turns t
+JOIN ai_conversations c ON t.conversation_id = c.id
+WHERE c.session_id = $1
+ORDER BY t.turn_number ASC
 `
 
 func (q *Queries) ListMessagesBySession(ctx context.Context, sessionID string) ([]Message, error) {

@@ -95,10 +95,11 @@ func (q *Queries) GetFile(ctx context.Context, id string) (File, error) {
 }
 
 const getFileByPathAndSession = `-- name: GetFileByPathAndSession :one
-SELECT id, session_id, path, content, version, created_at, updated_at
-FROM files
-WHERE path = ? AND session_id = ?
-ORDER BY version DESC, created_at DESC
+SELECT f.id, c.session_id, f.path, f.content, f.version, f.created_at, f.updated_at
+FROM files f
+JOIN ai_conversations c ON f.conversation_id = c.id
+WHERE f.path = $1 AND c.session_id = $2
+ORDER BY f.version DESC, f.created_at DESC
 LIMIT 1
 `
 
@@ -123,9 +124,9 @@ func (q *Queries) GetFileByPathAndSession(ctx context.Context, arg GetFileByPath
 }
 
 const listFilesByPath = `-- name: ListFilesByPath :many
-SELECT id, session_id, path, content, version, created_at, updated_at
+SELECT id, conversation_id AS session_id, path, content, version, created_at, updated_at
 FROM files
-WHERE path = ?
+WHERE path = $1
 ORDER BY version DESC, created_at DESC
 `
 

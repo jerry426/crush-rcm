@@ -1,14 +1,16 @@
 version: "2"
 sql:
-  - engine: "sqlite"
-    schema: "internal/db/migrations"
+  - engine: "postgresql"
+    database:
+      managed: true
+      uri: "postgresql://token_saver:token_saver_secure_pwd_2024@localhost:5432/token_saver_ai_bridge?sslmode=disable"
     queries: "internal/db/sql"
     gen:
       go:
         package: "db"
         out: "internal/db"
         emit_json_tags: true
-        emit_prepared_queries: true
+        emit_prepared_queries: false
         emit_interface: true
-        emit_exact_table_names: false
+        emit_exact_table_names: true
         emit_empty_slices: true

@@ -1,42 +1,57 @@
 -- name: GetMessage :one
 SELECT *
-FROM messages
-WHERE id = ? LIMIT 1;
+FROM ai_conversation_turns
+WHERE id = $1 LIMIT 1;
 
 -- name: ListMessagesBySession :many
-SELECT *
-FROM messages
-WHERE session_id = ?
-ORDER BY created_at ASC;
+SELECT t.*
+FROM ai_conversation_turns t
+JOIN ai_conversations c ON t.conversation_id = c.id
+WHERE c.session_id = $1
+ORDER BY t.turn_number ASC;
 
 -- name: CreateMessage :one
-INSERT INTO messages (
+INSERT INTO ai_conversation_turns (
     id,
-    session_id,
+    conversation_id,
+    turn_number,
+    agent,
     role,
+    content,
     parts,
     model,
     provider,
-    created_at,
-    updated_at
-) VALUES (
-    ?, ?, ?, ?, ?, ?, strftime('%s', 'now'), strftime('%s', 'now')
+    timestamp
 )
+SELECT
+    $1::uuid,
+    c.id,
+    COALESCE((SELECT MAX(turn_number) FROM ai_conversation_turns WHERE conversation_id = c.id), 0) + 1,
+    $3,
+    $4,
+    $5,
+    $6,
+    $7,
+    $8,
+    CURRENT_TIMESTAMP
+FROM ai_conversations c
+WHERE c.session_id = $2
 RETURNING *;
 
 -- name: UpdateMessage :exec
-UPDATE messages
+UPDATE ai_conversation_turns
 SET
-    parts = ?,
-    finished_at = ?,
-    updated_at = strftime('%s', 'now')
-WHERE id = ?;
-
+    content = $1,
+    parts = $2,
+    finished_at = $3
+WHERE id = $4;
 
 -- name: DeleteMessage :exec
-DELETE FROM messages
-WHERE id = ?;
+DELETE FROM ai_conversation_turns
+WHERE id = $1;
 
 -- name: DeleteSessionMessages :exec
-DELETE FROM messages
-WHERE session_id = ?;
+DELETE FROM ai_conversation_turns t
+USING ai_conversations c
+WHERE t.conversation_id = c.id
+AND c.session_id = $1;

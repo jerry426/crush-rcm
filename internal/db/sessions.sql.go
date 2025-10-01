@@ -11,29 +11,29 @@ import (
 )
 
 const createSession = `-- name: CreateSession :one
-INSERT INTO sessions (
-    id,
-    parent_session_id,
+INSERT INTO ai_conversations (
+    session_id,
+    parent_conversation_id,
     title,
-    message_count,
-    prompt_tokens,
-    completion_tokens,
-    cost,
-    summary_message_id,
-    updated_at,
-    created_at
+    start_time,
+    last_active,
+    status,
+    total_turns,
+    total_tokens_input,
+    total_tokens_output,
+    cost_usd
 ) VALUES (
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    null,
-    strftime('%s', 'now'),
-    strftime('%s', 'now')
-) RETURNING id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id
+    $1,
+    $2,
+    $3,
+    CURRENT_TIMESTAMP,
+    CURRENT_TIMESTAMP,
+    'active',
+    $4,
+    $5,
+    $6,
+    $7
+) RETURNING id, session_id, parent_conversation_id, title, total_turns, total_tokens_input, total_tokens_output, cost_usd, created_at, updated_at, summary_turn_id
 `
 
 type CreateSessionParams struct {
@@ -57,7 +57,10 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 		arg.Cost,
 	)
 	var i Session
+	var dbID sql.NullString
+	var createdAt, updatedAt sql.NullTime
 	err := row.Scan(
+		&dbID,
 		&i.ID,
 		&i.ParentSessionID,
 		&i.Title,
@@ -65,16 +68,20 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 		&i.PromptTokens,
 		&i.CompletionTokens,
 		&i.Cost,
-		&i.UpdatedAt,
-		&i.CreatedAt,
+		&createdAt,
+		&updatedAt,
 		&i.SummaryMessageID,
 	)
+	if createdAt.Valid {
+		i.CreatedAt = createdAt.Time.Unix()
+		i.UpdatedAt = i.CreatedAt
+	}
 	return i, err
 }
 
 const deleteSession = `-- name: DeleteSession :exec
-DELETE FROM sessions
-WHERE id = ?
+DELETE FROM ai_conversations
+WHERE session_id = $1
 `
 
 func (q *Queries) DeleteSession(ctx context.Context, id string) error {
@@ -83,9 +90,9 @@ func (q *Queries) DeleteSession(ctx context.Context, id string) error {
 }
 
 const getSessionByID = `-- name: GetSessionByID :one
-SELECT id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id
-FROM sessions
-WHERE id = ? LIMIT 1
+SELECT session_id, parent_conversation_id, title, total_turns, total_tokens_input, total_tokens_output, cost_usd, updated_at, created_at, summary_turn_id
+FROM ai_conversations
+WHERE session_id = $1 LIMIT 1
 `
 
 func (q *Queries) GetSessionByID(ctx context.Context, id string) (Session, error) {
@@ -107,9 +114,9 @@ func (q *Queries) GetSessionByID(ctx context.Context, id string) (Session, error
 }
 
 const listSessions = `-- name: ListSessions :many
-SELECT id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id
-FROM sessions
-WHERE parent_session_id is NULL
+SELECT session_id, parent_conversation_id, title, total_turns, total_tokens_input, total_tokens_output, cost_usd, updated_at, created_at, summary_turn_id
+FROM ai_conversations
+WHERE parent_conversation_id is NULL
 ORDER BY created_at DESC
 `
 
@@ -148,15 +155,16 @@ func (q *Queries) ListSessions(ctx context.Context) ([]Session, error) {
 }
 
 const updateSession = `-- name: UpdateSession :one
-UPDATE sessions
+UPDATE ai_conversations
 SET
-    title = ?,
-    prompt_tokens = ?,
-    completion_tokens = ?,
-    summary_message_id = ?,
-    cost = ?
-WHERE id = ?
-RETURNING id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id
+    title = $1,
+    total_tokens_input = $2,
+    total_tokens_output = $3,
+    summary_turn_id = $4,
+    cost_usd = $5,
+    last_active = CURRENT_TIMESTAMP
+WHERE session_id = $6
+RETURNING session_id, parent_conversation_id, title, total_turns, total_tokens_input, total_tokens_output, cost_usd, updated_at, created_at, summary_turn_id
 `
 
 type UpdateSessionParams struct {

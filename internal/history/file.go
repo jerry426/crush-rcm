@@ -40,10 +40,10 @@ type Service interface {
 type service struct {
 	*pubsub.Broker[File]
 	db *sql.DB
-	q  *db.Queries
+	q  db.Querier
 }
 
-func NewService(q *db.Queries, db *sql.DB) Service {
+func NewService(q db.Querier, db *sql.DB) Service {
 	return &service{
 		Broker: pubsub.NewBroker[File](),
 		q:      q,
@@ -89,7 +89,7 @@ func (s *service) createWithVersion(ctx context.Context, sessionID, path, conten
 		}
 
 		// Create a new queries instance with the transaction
-		qtx := s.q.WithTx(tx)
+		qtx := s.q.(*db.PostgresQueries).WithTx(tx)
 
 		// Try to create the file within the transaction
 		dbFile, txErr := qtx.CreateFile(ctx, db.CreateFileParams{

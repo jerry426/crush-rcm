@@ -49,7 +49,7 @@ type App struct {
 
 // New initializes a new applcation instance.
 func New(ctx context.Context, conn *sql.DB, cfg *config.Config) (*App, error) {
-	q := db.New(conn)
+	q := db.NewPostgres(conn)
 	sessions := session.NewService(q)
 	messages := message.NewService(q)
 	files := history.NewService(q, conn)

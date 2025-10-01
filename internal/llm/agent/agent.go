@@ -181,6 +181,9 @@ func NewAgent(
 		var allowedCommands []string
 		if cfg.Permissions != nil {
 			allowedCommands = cfg.Permissions.AllowedCommands
+			slog.Info("RCM: Loaded allowed commands from config", "commands", allowedCommands, "count", len(allowedCommands))
+		} else {
+			slog.Warn("RCM: No permissions config found")
 		}
 		allTools := []tools.BaseTool{
 			tools.NewBashTool(permissions, cwd, cfg.Options.Attribution, allowedCommands),
