@@ -348,12 +348,10 @@ func (q *PostgresQueries) CreateMessage(ctx context.Context, arg CreateMessagePa
 			convID,
 		).Scan(&turnNumber)
 		if err != nil {
-			fmt.Printf("ERROR: Failed to get next turn number: %v\n", err)
 			return Message{}, fmt.Errorf("failed to get next turn number: %w", err)
 		}
 		turnSequence = 0
 		turnPartType = "user_message"
-		fmt.Printf("DEBUG: User message - turn_number=%d, turn_sequence=%d\n", turnNumber, turnSequence)
 	} else {
 		// Assistant/tool message continues the current turn
 		err = q.db.QueryRowContext(ctx,
@@ -362,11 +360,8 @@ func (q *PostgresQueries) CreateMessage(ctx context.Context, arg CreateMessagePa
 			convID,
 		).Scan(&turnNumber, &turnSequence)
 		if err != nil {
-			fmt.Printf("ERROR: Failed to get current turn info: %v\n", err)
 			return Message{}, fmt.Errorf("failed to get current turn info: %w", err)
 		}
-		fmt.Printf("DEBUG: %s message - turn_number=%d, turn_sequence=%d\n",
-			arg.Role, turnNumber, turnSequence)
 
 		// Determine turn_part_type based on role and content
 		if arg.Role == "tool" {
@@ -444,13 +439,8 @@ func (q *PostgresQueries) CreateMessage(ctx context.Context, arg CreateMessagePa
 	)
 
 	if err != nil {
-		fmt.Printf("ERROR: Failed to insert - turn_number=%d, turn_sequence=%d, turn_part_type=%s, role=%s, error=%v\n",
-			turnNumber, turnSequence, turnPartType, arg.Role, err)
 		return Message{}, fmt.Errorf("failed to create message: %w", err)
 	}
-
-	fmt.Printf("DEBUG: Inserted - turn_number=%d, turn_sequence=%d, turn_part_type=%s\n",
-		turnNumber, turnSequence, turnPartType)
 
 	msg.ID = msgUUID.String()
 	msg.SessionID = arg.SessionID
