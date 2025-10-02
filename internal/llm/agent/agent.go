@@ -368,6 +368,16 @@ func (a *agent) Run(ctx context.Context, sessionID string, content string, attac
 		return nil, nil
 	}
 
+	// Create user message BEFORE starting async processing to ensure correct UI ordering
+	var attachmentParts []message.ContentPart
+	for _, attachment := range attachments {
+		attachmentParts = append(attachmentParts, message.BinaryContent{Path: attachment.FilePath, MIMEType: attachment.MimeType, Data: attachment.Content})
+	}
+	userMsg, err := a.createUserMessage(ctx, sessionID, content, attachmentParts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create user message: %w", err)
+	}
+
 	genCtx, cancel := context.WithCancel(ctx)
 	a.activeRequests.Set(sessionID, cancel)
 	startTime := time.Now()
@@ -377,11 +387,7 @@ func (a *agent) Run(ctx context.Context, sessionID string, content string, attac
 		defer log.RecoverPanic("agent.Run", func() {
 			events <- a.err(fmt.Errorf("panic while running the agent"))
 		})
-		var attachmentParts []message.ContentPart
-		for _, attachment := range attachments {
-			attachmentParts = append(attachmentParts, message.BinaryContent{Path: attachment.FilePath, MIMEType: attachment.MimeType, Data: attachment.Content})
-		}
-		result := a.processGeneration(genCtx, sessionID, content, attachmentParts)
+		result := a.processGenerationWithUserMessage(genCtx, sessionID, userMsg)
 		if result.Error != nil {
 			if isCancelledErr(result.Error) {
 				slog.Error("Request canceled", "sessionID", sessionID)
@@ -403,19 +409,27 @@ func (a *agent) Run(ctx context.Context, sessionID string, content string, attac
 	return events, nil
 }
 
-func (a *agent) processGeneration(ctx context.Context, sessionID, content string, attachmentParts []message.ContentPart) AgentEvent {
+func (a *agent) processGenerationWithUserMessage(ctx context.Context, sessionID string, userMsg message.Message) AgentEvent {
 	cfg := config.Get()
 	// List existing messages; if none, start title generation asynchronously.
 	msgs, err := a.messages.List(ctx, sessionID)
 	if err != nil {
 		return a.err(fmt.Errorf("failed to list messages: %w", err))
 	}
-	if len(msgs) == 0 {
+	// Filter out the just-created user message from the list (it will be re-added)
+	var existingMsgs []message.Message
+	for _, msg := range msgs {
+		if msg.ID != userMsg.ID {
+			existingMsgs = append(existingMsgs, msg)
+		}
+	}
+
+	if len(existingMsgs) == 0 {
 		go func() {
 			defer log.RecoverPanic("agent.Run", func() {
 				slog.Error("panic while generating title")
 			})
-			titleErr := a.generateTitle(ctx, sessionID, content)
+			titleErr := a.generateTitle(ctx, sessionID, userMsg.Content().Text)
 			if titleErr != nil && !errors.Is(titleErr, context.Canceled) && !errors.Is(titleErr, context.DeadlineExceeded) {
 				slog.Error("failed to generate title", "error", titleErr)
 			}
@@ -427,24 +441,20 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 	}
 	if session.SummaryMessageID != "" {
 		summaryMsgInex := -1
-		for i, msg := range msgs {
+		for i, msg := range existingMsgs {
 			if msg.ID == session.SummaryMessageID {
 				summaryMsgInex = i
 				break
 			}
 		}
 		if summaryMsgInex != -1 {
-			msgs = msgs[summaryMsgInex:]
-			msgs[0].Role = message.User
+			existingMsgs = existingMsgs[summaryMsgInex:]
+			existingMsgs[0].Role = message.User
 		}
 	}
 
-	userMsg, err := a.createUserMessage(ctx, sessionID, content, attachmentParts)
-	if err != nil {
-		return a.err(fmt.Errorf("failed to create user message: %w", err))
-	}
 	// Append the new user message to the conversation history.
-	msgHistory := append(msgs, userMsg)
+	msgHistory := append(existingMsgs, userMsg)
 
 	for {
 		// Check for cancellation before each iteration

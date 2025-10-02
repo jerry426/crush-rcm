@@ -22,7 +22,23 @@ const (
 	PromptDefault    PromptID = "default"
 )
 
+// customPromptFile holds the path to a custom system prompt file (set via --system-prompt-file flag)
+var customPromptFile string
+
+// SetCustomPromptFile sets the custom prompt file path
+func SetCustomPromptFile(path string) {
+	customPromptFile = path
+}
+
 func GetPrompt(promptID PromptID, provider string, contextPaths ...string) string {
+	// If custom prompt file is set, load from file
+	if customPromptFile != "" {
+		if content, err := os.ReadFile(customPromptFile); err == nil {
+			return string(content)
+		}
+		// Fall through to default if file can't be read
+	}
+
 	basePrompt := ""
 	switch promptID {
 	case PromptCoder:
