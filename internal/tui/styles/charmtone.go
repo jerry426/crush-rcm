@@ -16,8 +16,8 @@ func NewCharmtoneTheme() *Theme {
 		Accent:    charmtone.Zest,
 
 		// Backgrounds
-		BgBase:        charmtone.Pepper,
-		BgBaseLighter: charmtone.BBQ,
+		BgBase:        ParseHex("#0a0a0a"), // Much darker gray (was charmtone.Pepper)
+		BgBaseLighter: ParseHex("#1a1a1a"), // Slightly lighter dark gray (was charmtone.BBQ)
 		BgSubtle:      charmtone.Charcoal,
 		BgOverlay:     charmtone.Iron,
 
