@@ -3,18 +3,18 @@
 
 echo "🔧 Starting Crush-RCM with full logging..."
 echo "📁 Log file: /tmp/crush-full.log"
-echo "📊 Database: rcm_context"
+echo "📊 Database: rcm_system"
 echo ""
 echo "To watch the log in another terminal, run:"
 echo "  tail -f /tmp/crush-full.log"
 echo ""
 
-# Set PostgreSQL connection to rcm_context database
+# Set PostgreSQL connection to rcm_system database
 export POSTGRES_HOST=localhost
 export POSTGRES_PORT=5432
 export POSTGRES_USER=token_saver
 export POSTGRES_PASSWORD=token_saver_secure_pwd_2024
-export POSTGRES_DB=rcm_context
+export POSTGRES_DB=rcm_system
 
 # Clear previous log
 > /tmp/crush-full.log

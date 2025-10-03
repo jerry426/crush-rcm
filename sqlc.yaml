@@ -3,7 +3,7 @@ sql:
   - engine: "postgresql"
     database:
       managed: true
-      uri: "postgresql://token_saver:token_saver_secure_pwd_2024@localhost:5432/token_saver_ai_bridge?sslmode=disable"
+      uri: "postgresql://token_saver:token_saver_secure_pwd_2024@localhost:5432/rcm_system?sslmode=disable"
     queries: "internal/db/sql"
     gen:
       go:

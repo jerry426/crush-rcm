@@ -36,13 +36,17 @@ type Service interface {
 
 type service struct {
 	*pubsub.Broker[Session]
-	q db.Querier
+	q             db.Querier
+	modelProvider string
+	modelID       string
 }
 
 func (s *service) Create(ctx context.Context, title string) (Session, error) {
 	dbSession, err := s.q.CreateSession(ctx, db.CreateSessionParams{
-		ID:    uuid.New().String(),
-		Title: title,
+		ID:            uuid.New().String(),
+		Title:         title,
+		ModelProvider: s.modelProvider,
+		ModelID:       s.modelID,
 	})
 	if err != nil {
 		return Session{}, err
@@ -58,6 +62,8 @@ func (s *service) CreateTaskSession(ctx context.Context, toolCallID, parentSessi
 		ID:              toolCallID,
 		ParentSessionID: sql.NullString{String: parentSessionID, Valid: true},
 		Title:           title,
+		ModelProvider:   s.modelProvider,
+		ModelID:         s.modelID,
 	})
 	if err != nil {
 		return Session{}, err
@@ -72,6 +78,8 @@ func (s *service) CreateTitleSession(ctx context.Context, parentSessionID string
 		ID:              "title-" + parentSessionID,
 		ParentSessionID: sql.NullString{String: parentSessionID, Valid: true},
 		Title:           "Generate a title",
+		ModelProvider:   s.modelProvider,
+		ModelID:         s.modelID,
 	})
 	if err != nil {
 		return Session{}, err
@@ -150,10 +158,12 @@ func (s service) fromDBItem(item db.Session) Session {
 	}
 }
 
-func NewService(q db.Querier) Service {
+func NewService(q db.Querier, modelProvider, modelID string) Service {
 	broker := pubsub.NewBroker[Session]()
 	return &service{
-		broker,
-		q,
+		Broker:        broker,
+		q:             q,
+		modelProvider: modelProvider,
+		modelID:       modelID,
 	}
 }

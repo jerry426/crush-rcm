@@ -6,14 +6,14 @@ WHERE id = $1 LIMIT 1;
 -- name: ListMessagesBySession :many
 SELECT t.*
 FROM ai_conversation_turns t
-JOIN ai_conversations c ON t.conversation_id = c.id
+JOIN ai_conversations c ON t.id_conversation = c.id
 WHERE c.session_id = $1
 ORDER BY t.turn_number ASC;
 
 -- name: CreateMessage :one
 INSERT INTO ai_conversation_turns (
     id,
-    conversation_id,
+    id_conversation,
     turn_number,
     agent,
     role,
@@ -26,7 +26,7 @@ INSERT INTO ai_conversation_turns (
 SELECT
     $1::uuid,
     c.id,
-    COALESCE((SELECT MAX(turn_number) FROM ai_conversation_turns WHERE conversation_id = c.id), 0) + 1,
+    COALESCE((SELECT MAX(turn_number) FROM ai_conversation_turns WHERE id_conversation = c.id), 0) + 1,
     $3,
     $4,
     $5,
@@ -53,5 +53,5 @@ WHERE id = $1;
 -- name: DeleteSessionMessages :exec
 DELETE FROM ai_conversation_turns t
 USING ai_conversations c
-WHERE t.conversation_id = c.id
+WHERE t.id_conversation = c.id
 AND c.session_id = $1;

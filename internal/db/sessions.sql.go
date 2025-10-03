@@ -40,6 +40,8 @@ type CreateSessionParams struct {
 	ID               string         `json:"id"`
 	ParentSessionID  sql.NullString `json:"parent_session_id"`
 	Title            string         `json:"title"`
+	ModelProvider    string         `json:"model_provider"`
+	ModelID          string         `json:"model_id"`
 	MessageCount     int64          `json:"message_count"`
 	PromptTokens     int64          `json:"prompt_tokens"`
 	CompletionTokens int64          `json:"completion_tokens"`

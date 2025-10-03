@@ -12,12 +12,12 @@ import (
 )
 
 func Connect(ctx context.Context, dataDir string) (*sql.DB, error) {
-	// PostgreSQL connection uses rcm_context database
+	// PostgreSQL connection uses rcm_system database (unified RCM system)
 	host := getEnv("POSTGRES_HOST", "localhost")
 	port := getEnv("POSTGRES_PORT", "5432")
 	user := getEnv("POSTGRES_USER", "token_saver")
 	password := getEnv("POSTGRES_PASSWORD", "token_saver_secure_pwd_2024")
-	dbname := getEnv("POSTGRES_DB", "rcm_context")
+	dbname := getEnv("POSTGRES_DB", "rcm_system")
 
 	connStr := fmt.Sprintf(
 		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",

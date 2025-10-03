@@ -50,7 +50,20 @@ type App struct {
 // New initializes a new applcation instance.
 func New(ctx context.Context, conn *sql.DB, cfg *config.Config) (*App, error) {
 	q := db.NewPostgres(conn)
-	sessions := session.NewService(q)
+
+	// Get model and provider from config (set by CLI args)
+	model := cfg.GetModelByType(config.SelectedModelTypeLarge)
+	modelProvider := ""
+	modelID := ""
+	if model != nil {
+		modelID = model.ID
+		// Get the provider for this model
+		if selectedModel, ok := cfg.Models[config.SelectedModelTypeLarge]; ok {
+			modelProvider = selectedModel.Provider
+		}
+	}
+
+	sessions := session.NewService(q, modelProvider, modelID)
 	messages := message.NewService(q)
 	files := history.NewService(q, conn)
 	skipPermissionsRequests := cfg.Permissions != nil && cfg.Permissions.SkipRequests

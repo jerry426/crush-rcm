@@ -2,19 +2,19 @@
 # Run Crush-RCM with error capture but normal TUI
 
 echo "🔧 Starting Crush-RCM..."
-echo "📊 Database: rcm_context"
+echo "📊 Database: rcm_system"
 echo "📁 Error log: /tmp/crush-errors.log"
 echo ""
 echo "If an error occurs, check: cat /tmp/crush-errors.log"
 echo ""
 sleep 2
 
-# Set PostgreSQL connection to rcm_context database
+# Set PostgreSQL connection to rcm_system database
 export POSTGRES_HOST=localhost
 export POSTGRES_PORT=5432
 export POSTGRES_USER=token_saver
 export POSTGRES_PASSWORD=token_saver_secure_pwd_2024
-export POSTGRES_DB=rcm_context
+export POSTGRES_DB=rcm_system
 
 # Clear previous error log
 > /tmp/crush-errors.log

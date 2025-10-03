@@ -33,11 +33,23 @@ func (q *PostgresQueries) WithTx(tx *sql.Tx) *PostgresQueries {
 // CreateSession creates a new conversation session
 func (q *PostgresQueries) CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error) {
 	// Debug logging removed - working correctly now
+	// Use default model/provider if not provided
+	modelProvider := arg.ModelProvider
+	if modelProvider == "" {
+		modelProvider = "anthropic"
+	}
+	modelID := arg.ModelID
+	if modelID == "" {
+		modelID = "claude-sonnet-4-5-20250929"
+	}
+
 	query := `
 		INSERT INTO ai_conversations (
 			session_id,
 			parent_conversation_id,
 			title,
+			model_provider,
+			model_id,
 			start_time,
 			last_active,
 			status,
@@ -46,11 +58,11 @@ func (q *PostgresQueries) CreateSession(ctx context.Context, arg CreateSessionPa
 			total_tokens_output,
 			cost_usd
 		) VALUES (
-			$1, $2, $3,
+			$1, $2, $3, $4, $5,
 			CURRENT_TIMESTAMP,
 			CURRENT_TIMESTAMP,
 			'active',
-			$4, $5, $6, $7
+			$6, $7, $8, $9
 		) RETURNING
 			session_id, parent_conversation_id, title,
 			total_turns, total_tokens_input, total_tokens_output,
@@ -66,6 +78,8 @@ func (q *PostgresQueries) CreateSession(ctx context.Context, arg CreateSessionPa
 		arg.ID,
 		arg.ParentSessionID,
 		arg.Title,
+		modelProvider,
+		modelID,
 		arg.MessageCount,
 		arg.PromptTokens,
 		arg.CompletionTokens,
@@ -344,7 +358,7 @@ func (q *PostgresQueries) CreateMessage(ctx context.Context, arg CreateMessagePa
 	if arg.Role == "user" {
 		// User message starts a new turn (user_side)
 		err = q.db.QueryRowContext(ctx,
-			`SELECT COALESCE(MAX(turn_number), 0) + 1 FROM ai_conversation_turns WHERE conversation_id = $1`,
+			`SELECT COALESCE(MAX(turn_number), 0) + 1 FROM ai_conversation_turns WHERE id_conversation = $1`,
 			convID,
 		).Scan(&turnNumber)
 		if err != nil {
@@ -356,7 +370,7 @@ func (q *PostgresQueries) CreateMessage(ctx context.Context, arg CreateMessagePa
 		// Assistant/tool message continues the current turn
 		err = q.db.QueryRowContext(ctx,
 			`SELECT COALESCE(MAX(turn_number), 1), COALESCE(MAX(turn_sequence), -1) + 1
-			 FROM ai_conversation_turns WHERE conversation_id = $1`,
+			 FROM ai_conversation_turns WHERE id_conversation = $1`,
 			convID,
 		).Scan(&turnNumber, &turnSequence)
 		if err != nil {
@@ -382,7 +396,7 @@ func (q *PostgresQueries) CreateMessage(ctx context.Context, arg CreateMessagePa
 
 	query := `
 		INSERT INTO ai_conversation_turns (
-			conversation_id,
+			id_conversation,
 			turn_number,
 			turn_sequence,
 			turn_part_type,
@@ -479,7 +493,7 @@ func (q *PostgresQueries) GetMessage(ctx context.Context, id string) (Message, e
 			t.id, c.session_id, t.role, t.parts, t.model, t.provider,
 			t.created_at, t.finished_at
 		FROM ai_conversation_turns t
-		JOIN ai_conversations c ON t.conversation_id = c.id
+		JOIN ai_conversations c ON t.id_conversation = c.id
 		WHERE t.id = $1
 		LIMIT 1
 	`
@@ -530,7 +544,7 @@ func (q *PostgresQueries) ListMessagesBySession(ctx context.Context, sessionID s
 			t.id, t.role, t.parts, t.model, t.provider,
 			t.created_at, t.finished_at
 		FROM ai_conversation_turns t
-		JOIN ai_conversations c ON t.conversation_id = c.id
+		JOIN ai_conversations c ON t.id_conversation = c.id
 		WHERE c.session_id = $1
 		ORDER BY t.turn_number ASC
 	`
@@ -627,7 +641,7 @@ func (q *PostgresQueries) DeleteSessionMessages(ctx context.Context, sessionID s
 	query := `
 		DELETE FROM ai_conversation_turns t
 		USING ai_conversations c
-		WHERE t.conversation_id = c.id
+		WHERE t.id_conversation = c.id
 		AND c.session_id = $1
 	`
 	_, err := q.db.ExecContext(ctx, query, sessionID)
@@ -636,7 +650,7 @@ func (q *PostgresQueries) DeleteSessionMessages(ctx context.Context, sessionID s
 
 // File operations - these are simple stubs for now
 func (q *PostgresQueries) CreateFile(ctx context.Context, arg CreateFileParams) (File, error) {
-	// Files need conversation_id, not session_id
+	// Files need id_conversation, not session_id
 	var convID uuid.UUID
 	err := q.db.QueryRowContext(ctx,
 		`SELECT id FROM ai_conversations WHERE session_id = $1`,
@@ -649,7 +663,7 @@ func (q *PostgresQueries) CreateFile(ctx context.Context, arg CreateFileParams) 
 
 	query := `
 		INSERT INTO files (
-			conversation_id,
+			id_conversation,
 			path,
 			content,
 			version
@@ -691,7 +705,7 @@ func (q *PostgresQueries) GetFile(ctx context.Context, id string) (File, error) 
 	query := `
 		SELECT f.id, c.session_id, f.path, f.content, f.version, f.created_at, f.updated_at
 		FROM files f
-		JOIN ai_conversations c ON f.conversation_id = c.id
+		JOIN ai_conversations c ON f.id_conversation = c.id
 		WHERE f.id = $1
 	`
 
@@ -724,7 +738,7 @@ func (q *PostgresQueries) GetFileByPathAndSession(ctx context.Context, arg GetFi
 	query := `
 		SELECT f.id, c.session_id, f.path, f.content, f.version, f.created_at, f.updated_at
 		FROM files f
-		JOIN ai_conversations c ON f.conversation_id = c.id
+		JOIN ai_conversations c ON f.id_conversation = c.id
 		WHERE f.path = $1 AND c.session_id = $2
 		ORDER BY f.version DESC, f.created_at DESC
 		LIMIT 1
@@ -759,7 +773,7 @@ func (q *PostgresQueries) ListFilesByPath(ctx context.Context, path string) ([]F
 	query := `
 		SELECT f.id, c.session_id, f.path, f.content, f.version, f.created_at, f.updated_at
 		FROM files f
-		JOIN ai_conversations c ON f.conversation_id = c.id
+		JOIN ai_conversations c ON f.id_conversation = c.id
 		WHERE f.path = $1
 		ORDER BY f.version DESC, f.created_at DESC
 	`
@@ -803,7 +817,7 @@ func (q *PostgresQueries) ListFilesBySession(ctx context.Context, sessionID stri
 	query := `
 		SELECT f.id, f.path, f.content, f.version, f.created_at, f.updated_at
 		FROM files f
-		JOIN ai_conversations c ON f.conversation_id = c.id
+		JOIN ai_conversations c ON f.id_conversation = c.id
 		WHERE c.session_id = $1
 		ORDER BY f.version ASC, f.created_at ASC
 	`
@@ -848,7 +862,7 @@ func (q *PostgresQueries) ListLatestSessionFiles(ctx context.Context, sessionID 
 		SELECT DISTINCT ON (f.path)
 			f.id, f.path, f.content, f.version, f.created_at, f.updated_at
 		FROM files f
-		JOIN ai_conversations c ON f.conversation_id = c.id
+		JOIN ai_conversations c ON f.id_conversation = c.id
 		WHERE c.session_id = $1
 		ORDER BY f.path, f.version DESC, f.created_at DESC
 	`
@@ -903,7 +917,7 @@ func (q *PostgresQueries) DeleteSessionFiles(ctx context.Context, sessionID stri
 	query := `
 		DELETE FROM files f
 		USING ai_conversations c
-		WHERE f.conversation_id = c.id
+		WHERE f.id_conversation = c.id
 		AND c.session_id = $1
 	`
 	_, err := q.db.ExecContext(ctx, query, sessionID)

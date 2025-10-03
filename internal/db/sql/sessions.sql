@@ -3,6 +3,8 @@ INSERT INTO ai_conversations (
     session_id,
     parent_conversation_id,
     title,
+    model_provider,
+    model_id,
     start_time,
     last_active,
     status
@@ -10,6 +12,8 @@ INSERT INTO ai_conversations (
     $1,
     $2,
     $3,
+    $4,
+    $5,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP,
     'active'
